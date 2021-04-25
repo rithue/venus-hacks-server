@@ -6,7 +6,7 @@ const ZIPCODE_URL = "https://www.zipcodeapi.com/rest/";
 const ZIPCODE_KEY =
   "lgPfA4rtwypjiXUlGZCkBeqcjkEitH65fetoBvU0Bri3zQd1lVUu7qdFKu6eHwR9";
 const CARBON_INTERFACE_URL = "https://www.carboninterface.com/api/v1/estimates";
-const CARBON_INTERFACE_TOKEN = "wKeeJfodPXHcoYr3IOL04g";
+const CARBON_INTERFACE_TOKEN = "IHI0TQbAFKWfE2s95T3A";
 const fuelTypes = {
   hybrid: "f9ff8de7-94a6-4a78-b70c-686dcbf720cc",
   electric: "ab91dfaf-004d-49e4-95d0-edd052eb44e1",
