@@ -1,5 +1,6 @@
 const https = require("https");
 const fetch = require("node-fetch");
+const mcache = require("memory-cache");
 
 const ZIPCODE_URL = "https://www.zipcodeapi.com/rest/";
 const ZIPCODE_KEY =
@@ -18,7 +19,7 @@ function getCarbonContent(startZipCode, endZipCode, fuelType, cb) {
     getCarbonInterface(response.distance, fuelType, function (resp) {
       let result = {
         distance: response.distance,
-        carbonEmission: resp.attributes.carbon_kg,
+        carbonEmission: resp,
       };
       console.log("result:", result);
       cb(result);
@@ -56,29 +57,106 @@ function getDistance(startZipCode, endZipCode, cb) {
 }
 
 function getCarbonInterface(distance, fuelType, cb) {
+  let cachedData = mcache.get(distance);
+  if (cachedData) {
+    console.log("loaded from cache:", cachedData);
+    cb(cachedData);
+    return;
+  }
   let bearer = "Bearer " + CARBON_INTERFACE_TOKEN;
 
-  let requestPayload = {
-    type: "vehicle",
-    distance_unit: "mi",
-    distance_value: distance,
-    vehicle_model_id: fuelTypes[fuelType],
-  };
-  let settings = {
+  let settingsGas = {
     method: "POST",
     headers: {
       Authorization: bearer,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(requestPayload),
+    body: JSON.stringify({
+      type: "vehicle",
+      distance_unit: "mi",
+      distance_value: distance,
+      vehicle_model_id: fuelTypes["gas"],
+    }),
   };
 
-  fetch(CARBON_INTERFACE_URL, settings)
-    .then((res) => res.json())
-    .then((json) => {
-      console.log("CI:", json);
-      cb(json.data);
+  let settingsHybrid = {
+    method: "POST",
+    headers: {
+      Authorization: bearer,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      type: "vehicle",
+      distance_unit: "mi",
+      distance_value: distance,
+      vehicle_model_id: fuelTypes["hybrid"],
+    }),
+  };
+
+  let settingsElectric = {
+    method: "POST",
+    headers: {
+      Authorization: bearer,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      type: "vehicle",
+      distance_unit: "mi",
+      distance_value: distance,
+      vehicle_model_id: fuelTypes["electric"],
+    }),
+  };
+
+  Promise.all([
+    fetch(CARBON_INTERFACE_URL, settingsGas),
+    fetch(CARBON_INTERFACE_URL, settingsHybrid),
+    fetch(CARBON_INTERFACE_URL, settingsElectric),
+  ])
+    .then(function (responses) {
+      // Get a JSON object from each of the responses
+      return Promise.all(
+        responses.map(function (response) {
+          return response.json();
+        })
+      );
+    })
+    .then(function (data) {
+      let result = {};
+      data.forEach((resp, idx) => {
+        const { data } = resp;
+        if (
+          data.attributes.vehicle_model_id ===
+          "f9ff8de7-94a6-4a78-b70c-686dcbf720cc"
+        ) {
+          result["hybrid_kg"] = data.attributes.carbon_kg;
+          result["hybrid_lb"] = data.attributes.carbon_lb;
+        } else if (
+          data.attributes.vehicle_model_id ===
+          "ab91dfaf-004d-49e4-95d0-edd052eb44e1"
+        ) {
+          result["electric_kg"] = data.attributes.carbon_kg;
+          result["electric_lb"] = data.attributes.carbon_lb;
+        } else {
+          result["gas_kg"] = data.attributes.carbon_kg;
+          result["gas_lb"] = data.attributes.carbon_lb;
+        }
+      });
+      console.log("result:", result);
+      mcache.put(distance, result, 86400);
+      cb(result);
+    })
+    .catch(function (error) {
+      // if there's an error, log it
+      console.log(error);
     });
+
+  //   fetch(CARBON_INTERFACE_URL, settings)
+  //     .then((res) => res.json())
+  //     .then((json) => {
+  //       console.log("CI:", json);
+  //       mcache.put(distance, json.data, 86400);
+  //       cb(json.data);
+  //     });
 }
 
 exports.getCarbonContent = getCarbonContent;
